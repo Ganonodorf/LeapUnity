@@ -1,0 +1,48 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEditor;
+
+public class Pruebas : MonoBehaviour {
+
+	// Use this for initialization
+	void Start () {
+        int num = Random.Range(0, 7);
+        string sPieza;
+        switch (num)
+        {
+            case 0:
+                sPieza = "O";
+                break;
+            case 1:
+                sPieza = "I";
+                break;
+            case 2:
+                sPieza = "Z";
+                break;
+            case 3:
+                sPieza = "Zinv";
+                break;
+            case 4:
+                sPieza = "L";
+                break;
+            case 5:
+                sPieza = "Linv";
+                break;
+            case 6:
+                sPieza = "T";
+                break;
+            default:
+                sPieza = "O";
+                break;
+        }
+
+        Object prefab = AssetDatabase.LoadAssetAtPath("Assets/Piezas/" + sPieza + ".prefab", typeof(GameObject));
+        GameObject pieza = Instantiate(prefab, Vector3.zero, Quaternion.identity) as GameObject
+    }
+	
+	// Update is called once per frame
+	void Update () {
+        
+    }
+}
