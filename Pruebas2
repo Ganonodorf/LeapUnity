@@ -13,8 +13,10 @@ public class ControlTetris2 : MonoBehaviour {
     // Se hace una matriz para el escenario y otra para guardar la posición de la pieza en todo momento
     public int[,] escenario = new int[21, 10];
     public int[,] piezaAct;
-    const float TimeFijo = 1.0f;
+    const float TimeFijo = 0.2f;
     float time = 0.0f;
+
+    public bool fijar = false;
 
     // Use this for initialization
     void Start ()
@@ -47,17 +49,23 @@ public class ControlTetris2 : MonoBehaviour {
         // Si se ha llegado a 1 segundo, la pieza baja
         if (time >= TimeFijo)
         {
+            // Primero se mueve abajo, y si no se puede, fijar sera true, por lo que la pieza se colocara
             Mover("Abajo");
+            if (fijar == true)
+            {
+                ColocarPieza();
+                fijar = false;
+            }
             time = 0;
         }
 
         // Si se mueve el dedo, la pieza cae
-        if (leaptest.caer == true)
-        {
-            // Se baja la pieza
-            ColocarPieza();
-            leaptest.caer = false;
-        }
+        //if (leaptest.caer == true)
+        //{
+        //    // Se baja la pieza
+        //    ColocarPieza();
+        //    leaptest.caer = false;
+        //}
         
     }
 
@@ -128,7 +136,6 @@ public class ControlTetris2 : MonoBehaviour {
 
         float Xmano = (float)leaptest.XAngle;
         float Ymano = (float)leaptest.YAngle;
-        //Debug.Log("X es: " + Xmano + " ; Y es: " + Ymano);
 
         // Posicion actual de la pieza, la sombra también se desplaza
         float Yactual = pieza.transform.position.y;
@@ -142,7 +149,7 @@ public class ControlTetris2 : MonoBehaviour {
         } else if ((30  <= Ymano) && (Ymano < 60)) {    pieza.transform.position = new Vector3(4.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(4.0f, Ysombra, 0.0f);
         } else if ((60  <= Ymano) && (Ymano < 90)) {    pieza.transform.position = new Vector3(3.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(3.0f, Ysombra, 0.0f);
         } else if ((90  <= Ymano) && (Ymano < 120)) {   pieza.transform.position = new Vector3(2.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(2.0f, Ysombra, 0.0f);
-        } else if ((120  <= Ymano) && (Ymano < 150)) {  pieza.transform.position = new Vector3(1.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(1.0f, Ysombra, 0.0f);
+        } else if ((120 <= Ymano) && (Ymano < 150)) {   pieza.transform.position = new Vector3(1.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(1.0f, Ysombra, 0.0f);
         } else {                                        pieza.transform.position = new Vector3(0.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(0.0f, Ysombra, 0.0f);
         }
     }
@@ -170,10 +177,12 @@ public class ControlTetris2 : MonoBehaviour {
                     if (piezaAct[contador, 0] == 0)                     // Primero se ve si la pieza está en el suelo
                     {
                         sepuede = false;
+                        fijar = true;
                     }
                     else if (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1]] == 1) // Despues si hay otra pieza abajo, no se hace en el mismo if para no acceder
                     {                                                            // por error a escenario de -1
                         sepuede = false;
+                        fijar = true;
                     }
                     else                                                         // Si todo va bien, abajo está la propia pieza o nada, pasamos a la siguiente
                     {
@@ -187,25 +196,35 @@ public class ControlTetris2 : MonoBehaviour {
 
     public void Movimiento(string mov)
     {
-        int[,] piezaNueva = new int[,] { { piezaAct[0, 0], piezaAct[0, 1] },
-                                       { piezaAct[1, 0], piezaAct[1, 1] },
-                                       { piezaAct[2, 0], piezaAct[2, 1] },
-                                       { piezaAct[3, 0], piezaAct[3, 1] }};
+        int[,] piezaNueva = piezaAct;
         switch (mov)
         {
             case "Abajo":
-
+                // Primero se pinta el escenario de 0
                 for(int i = 0; i < 4; i++)
                 {
-                    
-                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 0;
                 }
+
+                // Luego se baja la pieza actual una posición y se pinta la nueva posición en el escenario
+                for (int i = 0; i < 4; i++)
+                {
+                    piezaAct[i, 0] -= 1;
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 2;
+                }
+
+                // Se baja la pieza en unity
+                pieza.transform.position = new Vector3(pieza.transform.position.x, pieza.transform.position.y - 1, 0.0f);
                 break;
         }
     }
     public void ColocarPieza()
     {
-        //pieza.transform.position = sombra.transform.position;
+        // Donde este la pieza se pintan 1s y se crea una nueva pieza, con piezaAct nuevo
+        for (int i = 0; i < 4; i++)
+        {
+            escenario[piezaAct[i, 0], piezaAct[i, 1]] = 1;
+        }
         pieza = NewPieza();
     }
 }
