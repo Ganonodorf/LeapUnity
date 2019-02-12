@@ -6,16 +6,22 @@ using RotateBomba;
 
 public class ControlTetris2 : MonoBehaviour {
 
-    // Estableciendo variables
+    // Estableciendo la pieza y su forma
     GameObject pieza;
-    GameObject sombra;
+    string tipoPieza;
+    int posPieza;
 
     // Se hace una matriz para el escenario y otra para guardar la posición de la pieza en todo momento
     public int[,] escenario = new int[21, 10];
     public int[,] piezaAct;
-    const float TimeFijo = 0.2f;
-    float time = 0.0f;
 
+    // Variables de tiempo
+    const float TimeFijoBajar = 0.1f;
+    const float TimeFijoDesplazar = 0.4f;
+    float timeBajar = 0.0f;
+    float timeDesplazar = 0.0f;
+
+    // Variable que indica si hay que colocar la pieza o no
     public bool fijar = false;
 
     // Use this for initialization
@@ -37,17 +43,15 @@ public class ControlTetris2 : MonoBehaviour {
     // Update is called once per frame
     void Update() {
         // Sumamos tiempo al contador
-        time += Time.deltaTime;
+        timeBajar += Time.deltaTime;
+        timeDesplazar += Time.deltaTime;
 
         // Inicializamos las variables para luego acceder al script
         GameObject control = GameObject.Find("Control");
         LeapTest leaptest = control.GetComponent<LeapTest>();
 
-        // Se mira donde está la mano y se mueve la pieza
-        MoverHoriz();
-
         // Si se ha llegado a 1 segundo, la pieza baja
-        if (time >= TimeFijo)
+        if (timeBajar >= TimeFijoBajar)
         {
             // Primero se mueve abajo, y si no se puede, fijar sera true, por lo que la pieza se colocara
             Mover("Abajo");
@@ -56,7 +60,14 @@ public class ControlTetris2 : MonoBehaviour {
                 ColocarPieza();
                 fijar = false;
             }
-            time = 0;
+            timeBajar = 0;
+        }
+
+        // Se mira donde está la mano y se mueve la pieza
+        if (timeDesplazar >= TimeFijoDesplazar)
+        {
+            MoverHoriz();
+            timeDesplazar = 0;
         }
 
         // Si se mueve el dedo, la pieza cae
@@ -73,58 +84,55 @@ public class ControlTetris2 : MonoBehaviour {
     {
         // Se escoge pieza aleatoriamente y se guarda en la matriz del escenario
         int num = Random.Range(0, 7);
-        string sPieza;
         switch (num)
         {
             case 0:
-                sPieza = "O";
+                tipoPieza = "O";
                 escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
                 piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
                 break;
             case 1:
-                sPieza = "I";
+                tipoPieza = "I";
                 escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[19, 5] = 2; escenario[19, 6] = 2;
                 piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 19, 5 }, { 19, 6 } };
                 break;
             case 2:
-                sPieza = "Z";
+                tipoPieza = "Z";
                 escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 3] = 2;
                 piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 3 } };
                 break;
             case 3:
-                sPieza = "Zinv";
+                tipoPieza = "Zinv";
                 escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
                 piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 20, 4 }, { 20, 5 } };
                 break;
             case 4:
-                sPieza = "L";
+                tipoPieza = "L";
                 escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 3] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 3 }, { 18, 3 } };
+                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 3 } };
                 break;
             case 5:
-                sPieza = "Linv";
+                tipoPieza = "Linv";
                 escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 5] = 2;
                 piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 5 } };
                 break;
             case 6:
-                sPieza = "T";
+                tipoPieza = "T";
                 escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 4] = 2;
                 piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 4 } };
                 break;
             //Por si se vuelve loco, que devuelva algo
             default:
-                sPieza = "O";
+                tipoPieza = "O";
                 escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
                 piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
                 break;
         }
 
-        // Creacion de la sombra.
-        Object prefab = AssetDatabase.LoadAssetAtPath("Assets/Piezas/" + sPieza + ".prefab", typeof(GameObject));
-        //sombra = Instantiate(prefab, new Vector3(4.0f, 17.0f, 0.0f), Quaternion.identity) as GameObject;
-
         // Creacion de pieza
+        Object prefab = AssetDatabase.LoadAssetAtPath("Assets/Piezas/" + tipoPieza + ".prefab", typeof(GameObject));
         pieza = Instantiate(prefab, new Vector3(4.0f, 19.0f, 0.0f), Quaternion.identity) as GameObject;
+        posPieza = 1;
         return pieza;
     }
 
@@ -141,57 +149,173 @@ public class ControlTetris2 : MonoBehaviour {
         float Yactual = pieza.transform.position.y;
         //float Ysombra = sombra.transform.position.y;
 
-        if (Ymano < -90) {                              pieza.transform.position = new Vector3(9.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(9.0f, Ysombra, 0.0f);                                             
-        } else if ((-90 <= Ymano) && (Ymano < -60)) {   pieza.transform.position = new Vector3(8.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(8.0f, Ysombra, 0.0f);
-        } else if ((-60 <= Ymano) && (Ymano < -30)) {   pieza.transform.position = new Vector3(7.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(7.0f, Ysombra, 0.0f);
-        } else if ((-30 <= Ymano) && (Ymano < 0)) {     pieza.transform.position = new Vector3(6.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(6.0f, Ysombra, 0.0f);
-        } else if ((0   <= Ymano) && (Ymano < 30)) {    pieza.transform.position = new Vector3(5.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(5.0f, Ysombra, 0.0f);
-        } else if ((30  <= Ymano) && (Ymano < 60)) {    pieza.transform.position = new Vector3(4.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(4.0f, Ysombra, 0.0f);
-        } else if ((60  <= Ymano) && (Ymano < 90)) {    pieza.transform.position = new Vector3(3.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(3.0f, Ysombra, 0.0f);
-        } else if ((90  <= Ymano) && (Ymano < 120)) {   pieza.transform.position = new Vector3(2.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(2.0f, Ysombra, 0.0f);
-        } else if ((120 <= Ymano) && (Ymano < 150)) {   pieza.transform.position = new Vector3(1.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(1.0f, Ysombra, 0.0f);
-        } else {                                        pieza.transform.position = new Vector3(0.0f, Yactual, 0.0f); //sombra.transform.position = new Vector3(0.0f, Ysombra, 0.0f);
+        if (Ymano <= -80)
+        {
+            Mover("Derecha");
+        }
+        else if (Ymano >= 80)
+        {
+            Mover("Izquierda");
         }
     }
 
-    public bool Mover(string mov)
+    public void Mover(string mov)
     {
-        bool sepuede = false;
         if (EsPosible(mov))
         {
             Movimiento(mov);
-            sepuede = true;
         }
-        return sepuede;
     }
 
     public bool EsPosible(string mov)
     {
-        bool sepuede = true;
+        bool sePuede = true;
         int contador = 0;
         switch (mov)
         {
             case "Abajo":
-                while((contador < 4) && (sepuede == true))
+                while((contador < 4) && (sePuede == true))
                 {
                     if (piezaAct[contador, 0] == 0)                     // Primero se ve si la pieza está en el suelo
                     {
-                        sepuede = false;
+                        sePuede = false;
                         fijar = true;
                     }
-                    else if (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1]] == 1) // Despues si hay otra pieza abajo, no se hace en el mismo if para no acceder
-                    {                                                            // por error a escenario de -1
-                        sepuede = false;
+                    else if (escenario[piezaAct[contador, 0] - 1, piezaAct[contador, 1]] == 1)
+                    {                                                   // Despues si hay otra pieza abajo, no se hace en el mismo if para no acceder
+                        sePuede = false;                                // por error a escenario de -1
                         fijar = true;
                     }
-                    else                                                         // Si todo va bien, abajo está la propia pieza o nada, pasamos a la siguiente
+                    else                                                // Si todo va bien, abajo está la propia pieza o nada, pasamos a la siguiente
                     {
                         contador++;
                     }
                 }
                 break;
+
+            case "Derecha":
+                while ((contador < 4) && (sePuede == true))
+                {
+                    if (piezaAct[contador, 1] == 9)                     // Primero se ve si la pieza está en el borde derecho
+                    {
+                        sePuede = false;
+                    }
+                    else if (escenario[piezaAct[contador, 0], piezaAct[contador, 1] + 1] == 1)
+                    {                                                   // Despues si hay otra pieza a la derecha, no se hace en el mismo if para no acceder        
+                        sePuede = false;                                // por error a escenario de 10
+                    }
+                    else                                                // Si todo va bien, abajo está la propia pieza o nada, pasamos a la siguiente
+                    {
+                        contador++;
+                    }
+                }
+                break;
+
+            case "Izquierda":
+                while ((contador < 4) && (sePuede == true))
+                {
+                    if (piezaAct[contador, 1] == 0)                     // Primero se ve si la pieza está en el borde derecho
+                    {
+                        sePuede = false;
+                    }
+                    else if (escenario[piezaAct[contador, 0], piezaAct[contador, 1] - 1] == 1)
+                    {                                                   // Despues si hay otra pieza a la derecha, no se hace en el mismo if para no acceder
+                        sePuede = false;                                // por error a escenario de -1
+                    }
+                    else                                                // Si todo va bien, abajo está la propia pieza o nada, pasamos a la siguiente
+                    {
+                        contador++;
+                    }
+                }
+                break;
+
+            case "RotDer":
+                switch (tipoPieza)
+                {
+                    case "L":
+                        if ((piezaAct[0, 1] == 0) || (piezaAct[0, 1] == 9)) // Si esta pegado a cualquier pared no puede girar
+                        {
+                            sePuede = false;
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[piezaAct[0, 0] + 1, piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0] + 1, piezaAct[0, 1]] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1]] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[piezaAct[0, 0], piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0], piezaAct[0, 1] + 1] == 1) || (escenario[piezaAct[0, 0] + 1, piezaAct[0, 1] + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[piezaAct[0, 0] + 1, piezaAct[0, 1]] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1]] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1] + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[piezaAct[0, 0], piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0], piezaAct[0, 1] + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+
+                        break;
+
+                    case "Linv":                                            // TE HAS QUEDADO AQUI, ESTO NO ESTA BIEN
+                        if ((piezaAct[0, 1] == 0) || (piezaAct[0, 1] == 9)) // Si esta pegado a cualquier pared no puede girar
+                        {
+                            sePuede = false;
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[piezaAct[0, 0] + 1, piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0] + 1, piezaAct[0, 1]] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1]] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[piezaAct[0, 0], piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0], piezaAct[0, 1] + 1] == 1) || (escenario[piezaAct[0, 0] + 1, piezaAct[0, 1] + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[piezaAct[0, 0] + 1, piezaAct[0, 1]] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1]] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1] + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[piezaAct[0, 0], piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0] - 1, piezaAct[0, 1] - 1] == 1) || (escenario[piezaAct[0, 0], piezaAct[0, 1] + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+
+                        break;
+                    case "O":
+                        // Sonido?
+                        break;
+                }
+                break;
         }
-        return sepuede;
+        return sePuede;
     }
 
     public void Movimiento(string mov)
@@ -216,8 +340,45 @@ public class ControlTetris2 : MonoBehaviour {
                 // Se baja la pieza en unity
                 pieza.transform.position = new Vector3(pieza.transform.position.x, pieza.transform.position.y - 1, 0.0f);
                 break;
+
+            case "Derecha":
+                // Primero se pinta el escenario de 0
+                for (int i = 0; i < 4; i++)
+                {
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 0;
+                }
+
+                // Luego se desplaza a la derecha la pieza actual una posición y se pinta la nueva posición en el escenario
+                for (int i = 0; i < 4; i++)
+                {
+                    piezaAct[i, 1] += 1;
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 2;
+                }
+
+                // Se desplaza a la derecha la pieza en unity
+                pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y, 0.0f);
+                break;
+
+            case "Izquierda":
+                // Primero se pinta el escenario de 0
+                for (int i = 0; i < 4; i++)
+                {
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 0;
+                }
+
+                // Luego se desplaza a la izquierda la pieza actual una posición y se pinta la nueva posición en el escenario
+                for (int i = 0; i < 4; i++)
+                {
+                    piezaAct[i, 1] -= 1;
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 2;
+                }
+
+                // Se desplaza a la izquierda la pieza en unity
+                pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y, 0.0f);
+                break;
         }
     }
+
     public void ColocarPieza()
     {
         // Donde este la pieza se pintan 1s y se crea una nueva pieza, con piezaAct nuevo
