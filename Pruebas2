@@ -1,33 +1,72 @@
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.EventSystems;
 using UnityEngine;
-using UnityEditor;
+//using UnityEditor;
 using RotateBomba;
+using System.Linq;
+using UnityEngine.UI;
+using Leap;
+using UnityEngine.SceneManagement;
+
+// Musica, sombra, tiempo y puño
 
 public class ControlTetris2 : MonoBehaviour {
 
-    // Estableciendo la pieza y su forma
-    GameObject pieza;
+    public GameObject[] pieces;
+
+    // Estableciendo variables
+    GameObject pieza, pieza2, prefabPieza, prefabPieza2;
     string tipoPieza;
+    string tipoNextPieza = "nein";
     int posPieza;
+    int muro;
+    int score; Text scoreText;
+    int lines; Text linesText;
+    Text nivelText;
+    int xActualPieza;
+    Vector3 vectorPiezaAnterior;
+    bool GameOver = false;
+    bool Animacion = false;
+    bool continuar = true;
+    bool aEliminar = false;
+
+    int contador = 0;
+    int cont = 0;
+
+    int[] lineasAEliminar;
 
     // Se hace una matriz para el escenario y otra para guardar la posición de la pieza en todo momento
     public int[,] escenario = new int[21, 10];
     public int[,] piezaAct;
 
     // Variables de tiempo
-    const float TimeFijoBajar = 0.5f;
+    float TimeFijoBajar = 1.0f;
     const float TimeFijoDesplazar = 0.1f;
+    const float TimeFijoGirar = 0.5f;
+    const float TimeFijoRellenar = 0.008f;
+    const float TimeFijoEsperar = 1.0f;
+    const float TimeFijoParpadeo = 0.25f;
     float timeBajar = 0.0f;
     float timeDesplazar = 0.0f;
+    float timeGirar = 0.0f;
+    float timeRellenar = 0.0f;
+    float timeEsperar = 0.0f;
+    float timeParpadeo = 0.0f;
+
+
+    float antiguoGiro = 0.0f;
+    float distancia = 100.0f;
 
     // Variable que indica si hay que colocar la pieza o no
-    public bool fijar = false;
+    bool fijar = false;
+
 
     // Use this for initialization
     void Start ()
     {
         // Pieza inicial
+        xActualPieza = 4;
         pieza = NewPieza();
 
         // Rellenando la matriz de 0s
@@ -38,164 +77,411 @@ public class ControlTetris2 : MonoBehaviour {
                 escenario[i, j] = 0;
             }
         }
+
+        score = 0;
+        scoreText = GameObject.Find("Canvas/Score").GetComponent<Text>();
+        scoreText.text = "Score: 0";
+
+        lines = 0;
+        linesText = GameObject.Find("Canvas/Lines").GetComponent<Text>();
+        linesText.text = "Lines: 0";
+
+        nivelText = GameObject.Find("Canvas/Nivel").GetComponent<Text>();
+        nivelText.text = "Nivel: 1";
     }
 
     // Update is called once per frame
     void Update() {
-        // Sumamos tiempo al contador
-        timeBajar += Time.deltaTime;
-        timeDesplazar += Time.deltaTime;
-
-        // Inicializamos las variables para luego acceder al script
-        GameObject control = GameObject.Find("Control");
-        LeapTest leaptest = control.GetComponent<LeapTest>();
-
-        // Si se ha llegado a 1 segundo, la pieza baja
-        if (timeBajar >= TimeFijoBajar)
+        if ((GameOver == false) && (Animacion == false))
         {
-            // Primero se mueve abajo, y si no se puede, fijar sera true, por lo que la pieza se colocara
-            Mover("Abajo");
-            if (fijar == true)
+            // Sumamos tiempo al contador
+            timeBajar += Time.deltaTime;
+            timeDesplazar += Time.deltaTime;
+            timeGirar += Time.deltaTime;
+
+            while (timeEsperar <= TimeFijoEsperar)
             {
+                timeEsperar += Time.deltaTime;
+            }
+
+            // Input por teclado
+            if (Input.GetKeyDown(KeyCode.LeftArrow)) { Mover("Izquierda"); }
+
+            if (Input.GetKeyDown(KeyCode.RightArrow)) { Mover("Derecha"); }
+
+            if (Input.GetKeyDown(KeyCode.X)) { Mover("RotDer"); }
+
+            if (Input.GetKeyDown(KeyCode.Z)) { Mover("RotIzq"); }
+
+            if (Input.GetKeyDown(KeyCode.DownArrow)) { Mover("Abajo"); }
+
+            // Se mira donde está la mano y se mueve la pieza
+            if (timeDesplazar >= TimeFijoDesplazar)
+            {
+                MoverHoriz();
+                timeDesplazar = 0;
+            }
+
+            // Si la mano se rota, se gira la pieza
+            if (timeGirar >= TimeFijoGirar)
+            {
+                GameObject control = GameObject.Find("Control");
+                LeapTest leaptest = control.GetComponent<LeapTest>();
+
+                if (leaptest.giroMano != 0)
+                {
+                    if (leaptest.giroMano <= -2.2)
+                    {
+                        Mover("RotDer");
+                    }
+                    else if (leaptest.giroMano >= -0.4)
+                    {
+                        Mover("RotIzq");
+                    }
+                    else
+                    {
+                        // Doing nothing
+                    }
+                }
+                // Debug.Log("Giro: " + leaptest.giroMano);
+                timeGirar = 0;
+            }
+
+            // Si se mueve el dedo, la pieza gira
+            //if (leaptest.caer == true)
+            //{
+            //    // Se gira la pieza
+            //    Mover("RotDer");
+            //    leaptest.caer = false;
+            //}
+
+            // Printing
+            //string matrix = "";
+            //for (int i = 0; i < 21; i++)
+            //{
+            //    for (int j = 0; j < 10; j++)
+            //    {
+            //        matrix += (escenario[i, j] + " ");
+            //    }
+            //    matrix += "\n";
+            //}
+            //Debug.Log(matrix);
+
+            // Si se ha llegado a 1 segundo, la pieza baja
+            if (timeBajar >= TimeFijoBajar)
+            {
+                // Primero se mueve abajo, y si no se puede, fijar sera true, por lo que la pieza se colocara
+                if (fijar == false)
+                {
+                    Mover("Abajo");
+                }
+                else if (fijar == true)
+                {
+                    // Se espera durante 1 segundo mientras esta abajo
+                    if (timeEsperar <= TimeFijoEsperar)
+                    {
+                        timeEsperar += Time.deltaTime;
+                    }
+                    else
+                    {
+                        // Se coloca la pieza, y si se pueden eliminar algunas filas, se hace
+                        ColocarPieza();
+                        if (aEliminar == false)
+                        {
+                            Destroy(pieza);
+                            pieza = NewPieza();
+                        }
+                        else
+                        {
+                            // Se da pié a la animación
+                            Animacion = true;
+                            
+                        }
+                        fijar = false;
+                        timeEsperar = 0;
+                    }
+                }
+                timeBajar = 0;
+            }
+
+            if (Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                BajarDelTiron();
                 ColocarPieza();
+                if (aEliminar == false)
+                {
+                    Destroy(pieza);
+                    pieza = NewPieza();
+                }
+                else
+                {
+                    // Se da pié a la animación
+                    Animacion = true;
+
+                }
                 fijar = false;
             }
-            timeBajar = 0;
         }
-
-        // Input por teclado
-        if (Input.GetKeyDown(KeyCode.LeftArrow)) { Mover("Izquierda"); }
-
-        if (Input.GetKeyDown(KeyCode.RightArrow)) { Mover("Derecha"); }
-
-        if (Input.GetKeyDown(KeyCode.UpArrow)) { Mover("RotDer"); }
-
-        if (Input.GetKeyDown(KeyCode.DownArrow)) { Mover("Abajo"); }
-
-        //// Se mira donde está la mano y se mueve la pieza
-        //if (timeDesplazar >= TimeFijoDesplazar)
-        //{
-        //    MoverHoriz();
-        //    timeDesplazar = 0;
-        //}
-
-        // Girar desde teclado
-        //if(Input.GetAxis("Vertical") < 0)
-        //{
-        //    Mover("RotDer");
-        //}
-        //timeDesplazar = 0;
-
-        // Si se mueve el dedo, la pieza gira
-        //if (leaptest.caer == true)
-        //{
-        //    // Se gira la pieza
-        //    Mover("RotDer");
-        //    leaptest.caer = false;
-        //}
-
-        // Se comprueba si se puede eliminar alguna línea
-        //bool noMore = false;
-        //int k = 0, l = 0, nCeros = 0;
-        //int[] eliminarLineas = new int[20] {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-        //while ((noMore == false) || (k < 21))
-        //{
-        //    while (l < 10)
-        //    {
-        //        // Se mira cuantos ceros hay en la linea que toca
-        //        if (escenario[k, l] == 0)
-        //        {
-        //            nCeros++;
-        //        }
-        //        l++;
-        //    }
-
-        //    if (nCeros == 0)
-        //    {
-        //        eliminarLineas[k] = 1;
-        //    }
-        //    else if (nCeros == 10)
-        //    {
-        //        noMore = true;
-        //    }
-        //    k++;
-        //}
-
-        //for (int i = 0; i < 21; i++)
-        //{
-        //    if (eliminarLineas[i] == 1)
-        //    {
-
-        //    }
-        //}
-
-        // Printing
-        string matrix = "";
-        for (int i = 0; i < 21; i++)
+        else if (Animacion == true)
         {
-            for (int j = 0; j < 10; j++)
-            {
-                matrix += (escenario[i, j] + " ");
-            }
-            matrix += "\n";
-        }
-        Debug.Log(matrix);
-        
+            // Se hace la animación de que aparecen y desaparecen
+            timeParpadeo += Time.deltaTime;
 
+            if (timeParpadeo >= TimeFijoParpadeo)
+            {
+                distancia *= -1;
+                for (int i = lineasAEliminar.Length - 1; i >= 0; i--)
+                {
+                    // Si existe una linea a eliminar, se activa y desactiva para hacer un efecto guapisimo
+                    if (lineasAEliminar[i] > -1)
+                    {
+                        GameObject padre = GameObject.Find("Padres/Padre" + lineasAEliminar[i]);
+                        padre.transform.position = new Vector3(padre.transform.position.x + distancia, padre.transform.position.y, padre.transform.position.z);
+                    }
+                }
+                timeParpadeo = 0.0f;
+                cont++;
+            }
+            if (cont == 6)
+            {
+                Animacion = false;
+                cont = 0;
+                Eliminacion();
+                Destroy(pieza);
+                pieza = NewPieza();
+            }
+        }
+
+        // Si esta en GameOver, hay que rellenar
+        else
+        {
+            timeRellenar += Time.deltaTime;
+
+            if (timeRellenar >= TimeFijoRellenar)
+            {
+                if (contador < 21)
+                {
+                    for (int j = 0; j < 10; j++)
+                    {
+                        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        cube.transform.position = new Vector3(j, contador, 0);
+                        cube.transform.localScale = new Vector3(0.91f, 0.91f, 0.91f);
+                    }
+                    contador++;
+                }
+                timeRellenar = 0;
+            }
+
+            if (contador == 21)
+            {
+                SceneManager.LoadScene("Menu 3D");
+
+                GameObject control = GameObject.Find("Control");
+                Destroy(control);
+            }
+        }
     }
 
+    // List of functions
     public GameObject NewPieza()
     {
+        int num;
+        Destroy(pieza2);
         // Se escoge pieza aleatoriamente y se guarda en la matriz del escenario
-        int num = Random.Range(0, 2);
-        switch (num)
+        if (tipoNextPieza != "nein")
         {
-            case 0:
-                tipoPieza = "O";
-                escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
-                break;
-            case 1:
-                tipoPieza = "I";
-                escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[19, 5] = 2; escenario[19, 6] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 19, 5 }, { 19, 6 } };
-                break;
-            case 2:
-                tipoPieza = "Z";
-                escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 3] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 3 } };
-                break;
-            case 3:
-                tipoPieza = "Zinv";
-                escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 20, 4 }, { 20, 5 } };
-                break;
-            case 4:
-                tipoPieza = "L";
-                escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 3] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 3 } };
-                break;
-            case 5:
-                tipoPieza = "Linv";
-                escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 5] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 5 } };
-                break;
-            case 6:
-                tipoPieza = "T";
-                escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 4] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 4 } };
-                break;
-            //Por si se vuelve loco, que devuelva algo
-            default:
-                tipoPieza = "O";
-                escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
-                piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
-                break;
+            // Primero se pone la pieza
+            tipoPieza = tipoNextPieza;
+            switch (tipoPieza)
+            {
+                case "O":
+                    prefabPieza = pieces[0];
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
+                    break;
+                case "I":
+                    prefabPieza = pieces[1];
+                    escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[19, 5] = 2; escenario[19, 6] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 19, 5 }, { 19, 6 } };
+                    break;
+                case "Z":
+                    prefabPieza = pieces[2];
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 3] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 3 } };
+                    break;
+                case "Zinv":
+                    prefabPieza = pieces[3];
+                    escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 20, 4 }, { 20, 5 } };
+                    break;
+                case "L":
+                    prefabPieza = pieces[4];
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 3] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 3 } };
+                    break;
+                case "Linv":
+                    prefabPieza = pieces[5];
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 5 } };
+                    break;
+                case "T":
+                    prefabPieza = pieces[6];
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 4] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 4 } };
+                    break;
+                //Por si se vuelve loco, que devuelva algo
+                default:
+                    prefabPieza = pieces[0];
+                    tipoPieza = "O";
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
+                    break;
+            }
+
+            // Luego se elige una nueva pieza para el proximo
+            num = Random.Range(0, 7);
+            switch (num)
+            {
+                case 0:
+                    prefabPieza2 = pieces[0];
+                    tipoNextPieza = "O";
+                    break;
+                case 1:
+                    prefabPieza2 = pieces[1];
+                    tipoNextPieza = "I";
+                    break;
+                case 2:
+                    prefabPieza2 = pieces[2];
+                    tipoNextPieza = "Z";
+                    break;
+                case 3:
+                    prefabPieza2 = pieces[3];
+                    tipoNextPieza = "Zinv";
+                    break;
+                case 4:
+                    prefabPieza2 = pieces[4];
+                    tipoNextPieza = "L";
+                    break;
+                case 5:
+                    prefabPieza2 = pieces[5];
+                    tipoNextPieza = "Linv";
+                    break;
+                case 6:
+                    prefabPieza2 = pieces[6];
+                    tipoNextPieza = "T";
+                    break;
+                //Por si se vuelve loco, que devuelva algo
+                default:
+                    prefabPieza2 = pieces[0];
+                    tipoNextPieza = "O";
+                    break;
+            }
+        }
+        else
+        {
+            num = Random.Range(0, 7);
+            switch (num)
+            {
+                case 0:
+                    prefabPieza = pieces[0];
+                    tipoPieza = "O";
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
+                    break;
+                case 1:
+                    prefabPieza = pieces[1];
+                    tipoPieza = "I";
+                    escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[19, 5] = 2; escenario[19, 6] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 19, 5 }, { 19, 6 } };
+                    break;
+                case 2:
+                    prefabPieza = pieces[2];
+                    tipoPieza = "Z";
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 3] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 3 } };
+                    break;
+                case 3:
+                    prefabPieza = pieces[3];
+                    tipoPieza = "Zinv";
+                    escenario[19, 4] = 2; escenario[19, 3] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 3 }, { 20, 4 }, { 20, 5 } };
+                    break;
+                case 4:
+                    prefabPieza = pieces[4];
+                    tipoPieza = "L";
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 3] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 3 } };
+                    break;
+                case 5:
+                    prefabPieza = pieces[5];
+                    tipoPieza = "Linv";
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 5 } };
+                    break;
+                case 6:
+                    prefabPieza = pieces[6];
+                    tipoPieza = "T";
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[19, 3] = 2; escenario[18, 4] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 19, 3 }, { 18, 4 } };
+                    break;
+                //Por si se vuelve loco, que devuelva algo
+                default:
+                    prefabPieza = pieces[0];
+                    tipoPieza = "O";
+                    escenario[19, 4] = 2; escenario[19, 5] = 2; escenario[20, 4] = 2; escenario[20, 5] = 2;
+                    piezaAct = new int[,] { { 19, 4 }, { 19, 5 }, { 20, 4 }, { 20, 5 } };
+                    break;
+            }
+
+            num = Random.Range(0, 7);
+            switch (num)
+            {
+                case 0:
+                    prefabPieza2 = pieces[0];
+                    tipoNextPieza = "O";
+                    break;
+                case 1:
+                    prefabPieza2 = pieces[1];
+                    tipoNextPieza = "I";
+                    break;
+                case 2:
+                    prefabPieza2 = pieces[2];
+                    tipoNextPieza = "Z";
+                    break;
+                case 3:
+                    prefabPieza2 = pieces[3];
+                    tipoNextPieza = "Zinv";
+                    break;
+                case 4:
+                    prefabPieza2 = pieces[4];
+                    tipoNextPieza = "L";
+                    break;
+                case 5:
+                    prefabPieza2 = pieces[5];
+                    tipoNextPieza = "Linv";
+                    break;
+                case 6:
+                    prefabPieza2 = pieces[6];
+                    tipoNextPieza = "T";
+                    break;
+                //Por si se vuelve loco, que devuelva algo
+                default:
+                    prefabPieza2 = pieces[0];
+                    tipoNextPieza = "O";
+                    break;
+            }
         }
 
         // Creacion de pieza
-        Object prefab = AssetDatabase.LoadAssetAtPath("Assets/Piezas/" + tipoPieza + ".prefab", typeof(GameObject));
-        pieza = Instantiate(prefab, new Vector3(4.0f, 19.0f, 0.0f), Quaternion.identity) as GameObject;
+        pieza = Instantiate(prefabPieza);
+        pieza.transform.position = new Vector3(4.0f, 19.0f, 0.0f);
+        pieza.transform.rotation = new Quaternion(0.0f, 0.0f, 0.0f,0.0f);
+
+        pieza2 = Instantiate(prefabPieza2);
+        pieza2.transform.position = new Vector3(13.0f, 10.5f, 0.0f);
+
+        xActualPieza = 4;
+        MoverHoriz();
         posPieza = 1;
         return pieza;
     }
@@ -206,20 +492,38 @@ public class ControlTetris2 : MonoBehaviour {
         GameObject control = GameObject.Find("Control");
         LeapTest leaptest = control.GetComponent<LeapTest>();
 
-        float Xmano = (float)leaptest.XAngle;
-        float Ymano = (float)leaptest.YAngle;
+        // SACAR LAS COORDENADAS
+        Vector coordenadas = leaptest.coordenadas;
 
-        // Posicion actual de la pieza, la sombra también se desplaza
-        float Yactual = pieza.transform.position.y;
-        //float Ysombra = sombra.transform.position.y;
+        if (coordenadas != null){
+            float X = coordenadas.x;
+            int xNueva;
+            if (X <= -120) { xNueva = 0; }
+            else if ((X > -120) && (X <= -85)) { xNueva = 1; }
+            else if ((X > -85) && (X <= -50))  { xNueva = 2; }
+            else if ((X > -50)  && (X <= -15))  { xNueva = 3; }
+            else if ((X > -15)  && (X <= 20))   { xNueva = 4; }
+            else if ((X > 20)   && (X <= 55))   { xNueva = 5; }
+            else if ((X > 55)   && (X <= 90))  { xNueva = 6; }
+            else if ((X > 90)  && (X <= 125))  { xNueva = 7; }
+            else if ((X > 125)  && (X <= 160))  { xNueva = 8; }
+            else { xNueva = 9; }
 
-        if (Ymano <= -80)
-        {
-            Mover("Derecha");
-        }
-        else if (Ymano >= 80)
-        {
-            Mover("Izquierda");
+            if ((xNueva - xActualPieza) > 0)
+            {
+                for (int i = 0; i < (xNueva - xActualPieza); i++)
+                {
+                    Mover("Derecha");
+                }
+            }
+            else
+            {
+                for (int i = 0; i < (xActualPieza - xNueva); i++)
+                {
+                    Mover("Izquierda");
+                }
+            }
+            xActualPieza = xNueva;
         }
     }
 
@@ -235,6 +539,8 @@ public class ControlTetris2 : MonoBehaviour {
     {
         bool sePuede = true;
         int contador = 0;
+        int X = piezaAct[0, 1];
+        int Y = piezaAct[0, 0];
         switch (mov)
         {
             case "Abajo":
@@ -294,9 +600,6 @@ public class ControlTetris2 : MonoBehaviour {
                 break;
 
             case "RotDer":
-                int X = piezaAct[0, 1];
-                int Y = piezaAct[0, 0];
-
                 switch (tipoPieza)
                 {
                     case "I":
@@ -377,7 +680,6 @@ public class ControlTetris2 : MonoBehaviour {
                                 }
                             }
                         }
-
                         break;
 
                     case "Linv":
@@ -461,63 +763,438 @@ public class ControlTetris2 : MonoBehaviour {
                         break;
 
                     case "Z":
-                        if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                        if (Y == 0)
                         {
-                            if ((escenario[Y + 1, X + 1] == 1) || (escenario[Y - 1, X] == 1))
-                            {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
-                                sePuede = false;
-                            }
-                        }
-                        else if (posPieza == 2)
-                        {
-                            if ((escenario[Y + 1, X] == 1) || (escenario[Y, X + 2] == 1))
+                            if ((escenario[Y, X - 1] == 1) || (escenario[Y + 2, X] == 1))
                             {
                                 sePuede = false;
                             }
+                            else
+                            {
+                                muro = 1;
+                            }
+                                
                         }
-                        else if (posPieza == 3)
+                        else if (X == 0)
                         {
-                            if ((escenario[Y + 1, X] == 1) || (escenario[Y - 1, X - 1] == 1))
+                            if ((escenario[Y - 1, X + 1] == 1) || (escenario[Y - 1, X + 2] == 1))
                             {
                                 sePuede = false;
                             }
+                            else
+                            {
+                                muro = 2;
+                            }
                         }
-                        else if (posPieza == 4)
+                        else if (X == 9)
                         {
-                            if ((escenario[Y - 1, X] == 1) || (escenario[Y, X - 2] == 1))
+                            if ((escenario[Y + 1, X - 1] == 1) || (escenario[Y + 1, X - 2] == 1))
                             {
                                 sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 4;
+                            }
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[Y + 1, X + 1] == 1) || (escenario[Y - 1, X] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y - 1, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y - 1, X - 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[Y, X + 1] == 1) || (escenario[Y + 1, X - 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
                             }
                         }
                         break;
 
                     case "Zinv":
-                        if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                        if (Y == 0)
                         {
-                            if ((escenario[Y - 1, X + 1] == 1) || (escenario[Y, X + 1] == 1))
-                            {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
-                                sePuede = false;
-                            }
-                        }
-                        else if (posPieza == 2)
-                        {
-                            if ((escenario[Y - 1, X] == 1) || (escenario[Y, X + 2] == 1))
+                            if ((escenario[Y + 1, X - 1] == 1) || (escenario[Y + 2, X - 1] == 1))
                             {
                                 sePuede = false;
                             }
+                            else
+                            {
+                                muro = 1;
+                            }
+
                         }
-                        else if (posPieza == 3)
+                        else if (X == 0)
                         {
-                            if ((escenario[Y, X - 1] == 1) || (escenario[Y + 1, X - 1] == 1))
+                            if ((escenario[Y, X + 2] == 1) || (escenario[Y - 1, X] == 1))
                             {
                                 sePuede = false;
                             }
+                            else
+                            {
+                                muro = 2;
+                            }
                         }
-                        else if (posPieza == 4)
+                        else if (X == 9)
                         {
                             if ((escenario[Y + 1, X] == 1) || (escenario[Y, X - 2] == 1))
                             {
                                 sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 4;
+                            }
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[Y, X + 1] == 1) || (escenario[Y - 1, X + 1] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[Y - 1, X] == 1) || (escenario[Y - 1, X - 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y + 1, X - 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y + 1, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+                        break;
+                }
+                break;
+
+            case "RotIzq":
+                switch (tipoPieza)
+                {
+                    case "I":
+                        if (((posPieza == 2) || (posPieza == 4)) && ((X <= 1) || (X >= 8))) // Si esta pegado a cualquier pared no puede girar
+                        {
+                            sePuede = false;
+                        }
+                        else if (((posPieza == 1) || (posPieza == 3)) && (Y == 0))
+                        {
+                            sePuede = false;
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y + 2, X] == 1) || (escenario[Y - 1, X] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y, X + 1] == 1) || (escenario[Y, X + 2] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y - 1, X] == 1) || (escenario[Y - 2, X] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[Y, X - 2] == 1) || (escenario[Y, X - 1] == 1) || (escenario[Y, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+                        break;
+
+                    case "L":
+                        if ((X == 0) || (X == 9) || (Y == 0)) // Si esta pegado a cualquier pared no puede girar
+                        {
+                            sePuede = false;
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y - 1, X] == 1) || (escenario[Y - 1, X + 1] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y - 1, X - 1] == 1) || (escenario[Y, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[Y + 1, X - 1] == 1) || (escenario[Y + 1, X] == 1) || (escenario[Y - 1, X] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y, X + 1] == 1) || (escenario[Y + 1, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+                        break;
+
+                    case "Linv":
+                        if ((X == 0) || (X == 9) || (Y == 0)) // Si esta pegado a cualquier pared no puede girar
+                        {
+                            sePuede = false;
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y - 1, X] == 1) || (escenario[Y + 1, X + 1] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y - 1, X + 1] == 1) || (escenario[Y, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y - 1, X] == 1) || (escenario[Y - 1, X - 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y, X + 1] == 1) || (escenario[Y + 1, X - 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+                        break;
+
+                    case "O":
+                        // Sonido?
+                        break;
+
+                    case "T":
+                        if ((X == 0) || (X == 9) || (Y == 0)) // Si esta pegado a cualquier pared no puede girar
+                        {
+                            sePuede = false;
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if (escenario[Y - 1, X] == 1)
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if (escenario[Y, X - 1] == 1)
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if (escenario[Y + 1, X] == 1)
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if (escenario[Y, X + 1] == 1)
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+                        break;
+
+                    case "Z":
+                        if (Y == 0)
+                        {
+                            if ((escenario[Y + 1, X + 1] == 1) || (escenario[Y + 2, X + 1] == 1))
+                            {
+                                sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 1;
+                            }
+
+                        }
+                        else if (X == 0)
+                        {
+                            if ((escenario[Y, X + 2] == 1) || (escenario[Y + 1, X] == 1))
+                            {
+                                sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 2;
+                            }
+                        }
+                        else if (X == 9)
+                        {
+                            if ((escenario[Y, X - 2] == 1) || (escenario[Y - 1, X] == 1))
+                            {
+                                sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 4;
+                            }
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y - 1, X - 1] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[Y, X + 1] == 1) || (escenario[Y + 1, X - 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[Y + 1, X + 1] == 1) || (escenario[Y - 1, X] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y - 1, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                        }
+                        break;
+
+                    case "Zinv":
+                        if (Y == 0)
+                        {
+                            if ((escenario[Y, X + 1] == 1) || (escenario[Y + 2, X] == 1))
+                            {
+                                sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 1;
+                            }
+
+                        }
+                        else if (X == 0)
+                        {
+                            if ((escenario[Y + 1, X + 1] == 1) || (escenario[Y + 1, X + 2] == 1))
+                            {
+                                sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 2;
+                            }
+                        }
+                        else if (X == 9)
+                        {
+                            if ((escenario[Y - 1, X - 1] == 1) || (escenario[Y - 1, X - 2] == 1))
+                            {
+                                sePuede = false;
+                            }
+                            else
+                            {
+                                muro = 4;
+                            }
+                        }
+                        else
+                        {
+                            if (posPieza == 1)                                 // IMPORTANTE: ESCENARIO [FILAS (Y), COLUMNAS (X)]
+                            {
+                                if ((escenario[Y, X - 1] == 1) || (escenario[Y + 1, X - 1] == 1))
+                                {// Se busca que exista una pieza ya colocada. Si es así, no se puede girar
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 2)
+                            {
+                                if ((escenario[Y + 1, X] == 1) || (escenario[Y + 1, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 3)
+                            {
+                                if ((escenario[Y, X + 1] == 1) || (escenario[Y - 1, X + 1] == 1))
+                                {
+                                    sePuede = false;
+                                }
+                            }
+                            else if (posPieza == 4)
+                            {
+                                if ((escenario[Y - 1, X] == 1) || (escenario[Y - 1, X - 1] == 1))   
+                                {
+                                    sePuede = false;
+                                }
                             }
                         }
                         break;
@@ -529,6 +1206,9 @@ public class ControlTetris2 : MonoBehaviour {
 
     public void Movimiento(string mov)
     {
+        int Y = piezaAct[0, 0];
+        int X = piezaAct[0, 1];
+
         switch (mov)
         {
             case "Abajo":
@@ -586,8 +1266,6 @@ public class ControlTetris2 : MonoBehaviour {
                 break;
 
             case "RotDer":
-                int Y = piezaAct[0, 0];
-                int X = piezaAct[0, 1];
 
                 // Primero se pinta el escenario de 0
                 for (int i = 0; i < 4; i++)
@@ -687,48 +1365,80 @@ public class ControlTetris2 : MonoBehaviour {
                         break;
 
                     case "Z":
-                        switch (posPieza)
+                        if (muro == 1)
                         {
-                            case 1:
-                                piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y + 1, X + 1 }, { Y - 1, X } };
-                                break;
+                            piezaAct = new int[,] { { Y + 1, X - 1 }, { Y, X - 1 }, { Y + 1, X }, { Y + 2, X } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y + 1, 0.0f);
+                        }
+                        else if (muro == 2)
+                        {
+                            piezaAct = new int[,] { { Y, X + 1 }, { Y, X }, { Y - 1, X + 1 }, { Y - 1, X + 2 } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else if (muro == 4)
+                        {
+                            piezaAct = new int[,] { { Y, X - 1 }, { Y, X }, { Y + 1, X - 1 }, { Y + 1, X - 2 } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else
+                        {
+                            switch (posPieza)
+                            {
+                                case 1:
+                                    piezaAct = new int[,] { { Y, X }, { Y - 1, X }, { Y, X + 1 }, { Y + 1, X + 1 } };
+                                    break;
 
-                            case 2:
-                                piezaAct = new int[,] { { Y + 1, X + 1 }, { Y + 1, X }, { Y, X + 1 }, { Y, X + 2 } };
-                                pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y + 1, 0.0f);
-                                break;
+                                case 2:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y - 1, X }, { Y - 1, X + 1 } };
+                                    break;
 
-                            case 3:
-                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y, X - 1 }, { Y - 1, X - 1 } };
-                                break;
+                                case 3:
+                                    piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y, X - 1 }, { Y - 1, X - 1 } };
+                                    break;
 
-                            case 4:
-                                piezaAct = new int[,] { { Y - 1, X - 1 }, { Y, X - 1 }, { Y, X - 2 }, { Y - 1, X } };
-                                pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y - 1, 0.0f);
-                                break;
+                                case 4:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y + 1, X }, { Y + 1, X - 1 } };
+                                    break;
+                            }
                         }
                         break;
 
                     case "Zinv":
-                        switch (posPieza)
+                        if (muro == 1)
                         {
-                            case 1:
-                                piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y - 1, X + 1 }, { Y + 1, X } };
-                                break;
+                            piezaAct = new int[,] { { Y + 1, X }, { Y, X }, { Y + 1, X - 1 }, { Y + 2, X - 1 } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y + 1, 0.0f);
+                        }
+                        else if (muro == 2)
+                        {
+                            piezaAct = new int[,] { { Y, X + 1 }, { Y - 1, X }, { Y - 1, X + 1 }, { Y, X + 2 } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else if (muro == 4)
+                        {
+                            piezaAct = new int[,] { { Y, X - 1 }, { Y, X - 2 }, { Y + 1, X - 1 }, { Y + 1, X } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else
+                        {
+                            switch (posPieza)
+                            {
+                                case 1:
+                                    piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y, X + 1 }, { Y - 1, X + 1 } };
+                                    break;
 
-                            case 2:
-                                piezaAct = new int[,] { { Y, X + 1 }, { Y, X + 2 }, { Y - 1, X + 1 }, { Y - 1, X } };
-                                pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y, 0.0f);
-                                break;
+                                case 2:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y - 1, X }, { Y - 1, X - 1 } };
+                                    break;
 
-                            case 3:
-                                piezaAct = new int[,] { { Y, X }, { Y - 1, X }, { Y, X - 1 }, { Y + 1, X - 1 } };
-                                break;
+                                case 3:
+                                    piezaAct = new int[,] { { Y, X }, { Y - 1, X }, { Y, X - 1 }, { Y + 1, X - 1 } };
+                                    break;
 
-                            case 4:
-                                piezaAct = new int[,] { { Y, X - 1 }, { Y, X - 2 }, { Y + 1, X }, { Y + 1, X - 1 } };
-                                pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y, 0.0f);
-                                break;
+                                case 4:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y + 1, X }, { Y + 1, X + 1 } };
+                                    break;
+                            }
                         }
                         break;
                 }
@@ -748,31 +1458,235 @@ public class ControlTetris2 : MonoBehaviour {
                 {
                     pieza.transform.Rotate(0.0f, 0.0f, -90.0f);
                 }
+
+                muro = 0;
+                break;
+
+            case "RotIzq":
+
+                // Primero se pinta el escenario de 0
+                for (int i = 0; i < 4; i++)
+                {
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 0;
+                }
+
+                // Luego se gira a la derecha la pieza actual dependiendo de su posición
+                switch (tipoPieza)
+                {
+                    case "I":
+                        switch (posPieza)
+                        {
+                            case 1:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y + 2, X }, { Y - 1, X } };
+                                break;
+
+                            case 2:
+                                piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y, X + 1 }, { Y, X + 2 } };
+                                break;
+
+                            case 3:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y - 1, X }, { Y - 2, X } };
+                                break;
+
+                            case 4:
+                                piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y, X - 1 }, { Y, X - 2 } };
+                                break;
+                        }
+                        break;
+
+                    case "L":
+                        switch (posPieza)
+                        {
+                            case 1:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y - 1, X + 1 }, { Y - 1, X } };
+                                break;
+
+                            case 2:
+                                piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y, X + 1 }, { Y - 1, X - 1 } };
+                                break;
+
+                            case 3:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y - 1, X }, { Y + 1, X - 1 } };
+                                break;
+
+                            case 4:
+                                piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y, X - 1 }, { Y + 1, X + 1 } };
+                                break;
+                        }
+                        break;
+
+                    case "Linv":
+                        switch (posPieza)
+                        {
+                            case 1:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y + 1, X + 1 }, { Y - 1, X } };
+                                break;
+
+                            case 2:
+                                piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y, X + 1 }, { Y - 1, X + 1 } };
+                                break;
+
+                            case 3:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y - 1, X }, { Y - 1, X - 1 } };
+                                break;
+
+                            case 4:
+                                piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y, X - 1 }, { Y + 1, X - 1 } };
+                                break;
+                        }
+                        break;
+
+                    case "O":
+                        // Sonido?
+                        break;
+
+                    case "T":
+                        switch (posPieza)
+                        {
+                            case 1:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y, X + 1 }, { Y - 1, X } };
+                                break;
+
+                            case 2:
+                                piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y, X + 1 }, { Y - 1, X } };
+                                break;
+
+                            case 3:
+                                piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y - 1, X }, { Y, X - 1 } };
+                                break;
+
+                            case 4:
+                                piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y, X - 1 }, { Y + 1, X } };
+                                break;
+                        }
+                        break;
+
+                    case "Z":
+                        if (muro == 1)
+                        {
+                            piezaAct = new int[,] { { Y + 1, X + 1 }, { Y, X }, { Y + 1, X }, { Y + 2, X + 1 } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y + 1, 0.0f);
+                        }
+                        else if (muro == 2)
+                        {
+                            piezaAct = new int[,] { { Y, X + 1 }, { Y, X + 2 }, { Y + 1, X + 1 }, { Y + 1, X } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else if (muro == 4)
+                        {
+                            piezaAct = new int[,] { { Y - 1, X - 1 }, { Y, X - 1 }, { Y, X - 2 }, { Y - 1, X } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else
+                        {
+                            switch (posPieza)
+                            {
+                                case 1:
+                                    piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y, X - 1 }, { Y - 1, X - 1 } };
+                                    break;
+
+                                case 2:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y + 1, X }, { Y + 1, X - 1 } };
+                                    break;
+
+                                case 3:
+                                    piezaAct = new int[,] { { Y, X }, { Y - 1, X }, { Y, X + 1 }, { Y + 1, X + 1 } };
+                                    break;
+
+                                case 4:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y - 1, X }, { Y - 1, X + 1 } };
+                                    break;
+                            }
+                        }
+                        break;
+
+                    case "Zinv":
+                        if (muro == 1)
+                        {
+                            piezaAct = new int[,] { { Y + 1, X + 1 }, { Y, X + 1 }, { Y + 1, X }, { Y + 2, X } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y + 1, 0.0f);
+                        }
+                        else if (muro == 2)
+                        {
+                            piezaAct = new int[,] { { Y, X + 1 }, { Y, X }, { Y + 1, X + 1 }, { Y + 1, X + 2 } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x + 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else if (muro == 4)
+                        {
+                            piezaAct = new int[,] { { Y, X - 1 }, { Y, X }, { Y - 1, X - 1 }, { Y - 1, X - 2 } };
+                            pieza.transform.position = new Vector3(pieza.transform.position.x - 1, pieza.transform.position.y, 0.0f);
+                        }
+                        else
+                        {
+                            switch (posPieza)
+                            {
+                                case 1:
+                                    piezaAct = new int[,] { { Y, X }, { Y - 1, X }, { Y, X - 1 }, { Y + 1, X - 1 } };
+                                    break;
+
+                                case 2:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X - 1 }, { Y + 1, X }, { Y + 1, X + 1 } };
+                                    break;
+
+                                case 3:
+                                    piezaAct = new int[,] { { Y, X }, { Y + 1, X }, { Y, X + 1 }, { Y - 1, X + 1 } };
+                                    break;
+
+                                case 4:
+                                    piezaAct = new int[,] { { Y, X }, { Y, X + 1 }, { Y - 1, X }, { Y - 1, X - 1 } };
+                                    break;
+                            }
+                        }
+                        break;
+                }
+
+                // Se pinta la nueva posición en el escenario
+                for (int i = 0; i < 4; i++)
+                {
+                    escenario[piezaAct[i, 0], piezaAct[i, 1]] = 2;
+                }
+
+                // Disminuimos la posicion de la pieza, para saber como se encuentra
+                posPieza--;
+                if (posPieza <= 0) { posPieza = 4; }
+
+                // Se gira a la izquierda la pieza en unity, menos la O. Los giros son positivos a la izquierda
+                if (tipoPieza != "O")
+                {
+                    pieza.transform.Rotate(0.0f, 0.0f, 90.0f);
+                }
+                muro = 0;
                 break;
         }
     }
 
     public void ColocarPieza()
     {
+        lineasAEliminar = new int[4] { -1, -1, -1, -1 };
+        int nCeros = 0;
+
+        if ((vectorPiezaAnterior == new Vector3(4.0f, 19.0f, 0.0f)) && pieza.transform.position == new Vector3(4.0f, 19.0f, 0.0f))
+        {
+            GameOver = true;
+        }
+
+        vectorPiezaAnterior = pieza.transform.position;
         // Donde este la pieza se pintan 1s
         for (int i = 0; i < 4; i++)
         {
             escenario[piezaAct[i, 0], piezaAct[i, 1]] = 1;
+            
+            // Aqui se cogen los cubos y se les asigna un padre acorde a su altura
+            GameObject child = pieza.transform.GetChild(0).gameObject;
+            float altura = child.transform.position.y;
+            int rounded = (int)System.Math.Round(altura, 0);
+
+            GameObject padre = GameObject.Find("Padres/Padre" + rounded);
+            child.transform.parent = padre.transform;            
         }
 
-        eliminacion();
 
-        // Se crea una nueva pieza, con piezaAct nuevo
-        pieza = NewPieza();
-    }
-
-    public void eliminacion()
-    {
-        int[] eliminarLineas = new int[4] { -1, -1, -1, -1 };
-        int nCeros = 0;
-        bool aEliminar = false;
-
-        // Se ve si se puede eliminar alguna línea, se recorren los cuatro cubos de la pieza
+        // Se ve si se puede eliminar alguna línea, se recorren las lineas donde esten los cuatro cubos de la pieza
         for (int i = 0; i < 4; i++)
         {
             for (int j = 0; j < 10; j++)
@@ -784,36 +1698,160 @@ public class ControlTetris2 : MonoBehaviour {
                 }
             }
 
-            // Si no hay ningun cero en la linea, significa que esta completa. Se guarda el numero de linea en eliminarLineas
+            // Si no hay ningun cero en la linea, significa que esta completa. Se guarda el numero de linea en lineasAEliminar
             if (nCeros == 0)
             {
-                eliminarLineas[i] = piezaAct[i, 0];
+                lineasAEliminar[i] = piezaAct[i, 0];
                 aEliminar = true;
             }
             nCeros = 0;
         }
+    }
 
-        if (aEliminar == true)
+    public void Eliminacion()
+    {
+        // Se ordena el array y se eliminan los repetidos
+        System.Array.Sort(lineasAEliminar);
+        lineasAEliminar = lineasAEliminar.Distinct().ToArray();
+        int counter = 0;
+
+        // Se recorre el array
+        for (int i = lineasAEliminar.Length - 1; i >= 0; i--)
         {
-            // Se ordena el array
-            System.Array.Sort(eliminarLineas);
-
-            // Se recorre
-            for (int i = 0; i < 4; i++)
+            // Si existe una linea a eliminar, se borra de la matriz y se bajan las demas piezas
+            if (lineasAEliminar[i] > -1)
             {
-                // Si existe una linea a eliminar, se borra
-                if (eliminarLineas[i] > -1)
+                counter += 1;
+
+                for (int j = 0; j < 10; j++)
                 {
-                    // Se borra de la matriz
-                    for (int j = 0; j < 10; j++)
+                    escenario[lineasAEliminar[i], j] = 0;
+                }
+
+                for (int k = lineasAEliminar[i]; k < 20; k++)
+                {
+                    for (int l = 0; l < 10; l++)
                     {
-                        escenario[eliminarLineas[i], j] = 0;
+                        escenario[k, l] = escenario[k + 1, l];
+                        escenario[k + 1, l] = 0;
+                    }
+                }
+
+                // Se borra la linea de Unity y se baja
+                foreach (Transform child in GameObject.Find("Padres/Padre" + lineasAEliminar[i]).transform)
+                {
+                    Destroy(child.gameObject);
+                }
+
+                for (int j = lineasAEliminar[i] + 1; j < 20; j++)
+                {
+                    int k = j - 1;
+                    GameObject padre = GameObject.Find("Padres/Padre" + j);
+                    GameObject nuevoPadre = GameObject.Find("Padres/Padre" + k);
+                    foreach (Transform child in padre.transform)
+                    {
+                        child.transform.position = new Vector3(child.transform.position.x, child.transform.position.y - 1, 0.0f);
                     }
 
-                    // Se borra de Unity
-
+                    int cuenta = padre.transform.childCount;
+                    for (int l = 0; l <= cuenta - 1; l++)
+                    {
+                        padre.transform.GetChild(0).parent = nuevoPadre.transform;
+                    }
                 }
             }
         }
+
+        // Se ponen bien los letreros
+        score += counter * 100;
+        if (counter == 4)
+        {
+            score += 100; // tetris!
+        }
+        scoreText.text = "Score: " + score;
+
+        lines += counter;
+        linesText.text = "Lines: " + lines;
+
+        if (lines < 10)
+        {
+            nivelText.text = "Nivel: 1";
+            TimeFijoBajar = 0.9f;
+        }
+        else if (lines < 20)
+        {
+            nivelText.text = "Nivel: 2";
+            TimeFijoBajar = 0.8f;
+        }
+        else if (lines < 30)
+        {
+            nivelText.text = "Nivel: 3";
+            TimeFijoBajar = 0.7f;
+        }
+        else if (lines < 40)
+        {
+            nivelText.text = "Nivel: 4";
+            TimeFijoBajar = 0.6f;
+        }
+        else if (lines < 50)
+        {
+            nivelText.text = "Nivel: 5";
+            TimeFijoBajar = 0.5f;
+        }
+        else if (lines < 60)
+        {
+            nivelText.text = "Nivel: 6";
+            TimeFijoBajar = 0.4f;
+        }
+        else if (lines < 70)
+        {
+            nivelText.text = "Nivel: 7";
+            TimeFijoBajar = 0.3f;
+        }
+        else if (lines < 80)
+        {
+            nivelText.text = "Nivel: 8";
+            TimeFijoBajar = 0.2f;
+        }
+        else
+        {
+            nivelText.text = "Nivel: 9";
+            TimeFijoBajar = 0.1f;
+        }
     }
+
+    public void BajarDelTiron()
+    {
+        while(fijar == false)
+        {
+            Mover("Abajo");
+        }
+    }
+
+    //public IEnumerator Rellenar()
+    //{
+    //    for (int i = 0; i < 21; i++)
+    //    {
+    //        yield return new WaitForSecondsRealtime(0.008f);
+    //        for (int j = 0; j < 10; j++)
+    //        {
+    //            GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+    //            cube.transform.position = new Vector3(j, i, 0);
+    //            cube.transform.localScale = new Vector3(0.91f, 0.91f, 0.91f);
+    //        }
+    //    }
+    //    SceneManager.LoadScene("Menu 3D");
+
+    //    GameObject control = GameObject.Find("Control");
+    //    Destroy(control);
+    //}
+
+    //public IEnumerator Esperar()
+    //{
+    //    Debug.Log("ASDF");
+    //    Time.timeScale = 0.0000001f;
+    //    yield return new WaitForSeconds(2 * Time.timeScale);
+    //    Time.timeScale = 1.0f;
+    //    Debug.Log("ASDF");
+    //}
 }
