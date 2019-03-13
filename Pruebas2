@@ -2,18 +2,16 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.EventSystems;
 using UnityEngine;
-//using UnityEditor;
 using RotateBomba;
 using System.Linq;
 using UnityEngine.UI;
 using Leap;
 using UnityEngine.SceneManagement;
 
-// Musica, sombra y puño
-
 public class ControlTetris2 : MonoBehaviour
 {
     public GameObject[] pieces;
+    public Material materialSombra;
 
     // Estableciendo variables
     GameObject pieza, pieza2, prefabPieza, prefabPieza2, sombra;
@@ -30,6 +28,11 @@ public class ControlTetris2 : MonoBehaviour
     bool Animacion = false;
     bool continuar = true;
     bool aEliminar = false;
+
+    const float LIMITEMANOCERRADA = 45.0f;  // Indica el limite para cerrar la mano
+    const float LIMITEINFGIROMANO = -2.0f;  // Indica el limite del giro de la mano derecha
+    const float LIMITESUPGIROMANO = -0.4f;  // Indica el limite del giro de la mano izquierda
+    const float RDHOR = 20.0f;              // Rango distancia horizontal para el desplazamiento
 
     int contador = 0;
     int cont = 0;
@@ -61,6 +64,8 @@ public class ControlTetris2 : MonoBehaviour
     // Variable que indica si hay que colocar la pieza o no
     bool fijar = false;
 
+    // Para controlar el cerrar de la mano
+    bool manoCerrada = false;
 
     // Use this for initialization
     void Start()
@@ -95,6 +100,9 @@ public class ControlTetris2 : MonoBehaviour
     {
         if ((GameOver == false) && (Animacion == false))
         {
+            GameObject control = GameObject.Find("Control");
+            LeapTest leaptest = control.GetComponent<LeapTest>();
+
             // Sumamos tiempo al contador
             timeBajar += Time.deltaTime;
             timeDesplazar += Time.deltaTime;
@@ -126,16 +134,13 @@ public class ControlTetris2 : MonoBehaviour
             // Si la mano se rota, se gira la pieza
             if (timeGirar >= TimeFijoGirar)
             {
-                GameObject control = GameObject.Find("Control");
-                LeapTest leaptest = control.GetComponent<LeapTest>();
-
                 if (leaptest.giroMano != 0)
                 {
-                    if (leaptest.giroMano <= -2.2)
+                    if (leaptest.giroMano <= LIMITEINFGIROMANO)
                     {
                         Mover("RotDer");
                     }
-                    else if (leaptest.giroMano >= -0.4)
+                    else if (leaptest.giroMano >= LIMITESUPGIROMANO)
                     {
                         Mover("RotIzq");
                     }
@@ -144,19 +149,45 @@ public class ControlTetris2 : MonoBehaviour
                         // Doing nothing
                     }
                 }
-                // Debug.Log("Giro: " + leaptest.giroMano);
+
                 timeGirar = 0;
             }
 
-            // Si se mueve el dedo, la pieza gira
-            //if (leaptest.caer == true)
-            //{
-            //    // Se gira la pieza
-            //    Mover("RotDer");
-            //    leaptest.caer = false;
-            //}
+            // Aqui se controla cuando la pieza cae directamente, si se cierra la mano, la pieza cae
+            if ((leaptest.manoCerrada != 0) && (leaptest.manoCerrada <= LIMITEMANOCERRADA) && (manoCerrada == false))
+            {
+                // La mano esta cerrada y se baja del todo la pieza
+                manoCerrada = true;
+                BajarDelTiron();
+                ColocarPieza();
+                if (aEliminar == false)
+                {
+                    Destroy(pieza);
+                    pieza = NewPieza();
+                }
+                else
+                {
+                    // Se da pié a la animación
+                    Animacion = true;
+                    aEliminar = false;
+                }
+                fijar = false;
 
-            // Printing
+            }
+            else if ((leaptest.manoCerrada != 0) && (leaptest.manoCerrada > LIMITEMANOCERRADA) && (manoCerrada == true))
+            {
+                manoCerrada = false;
+            }
+
+            // Si se mueve el dedo, la pieza baja una posicion
+            if (leaptest.caer == true)
+            {
+                // Se naja la pieza
+                Mover("Abajo");
+                leaptest.caer = false;
+            }
+
+            //Printing
             //string matrix = "";
             //for (int i = 0; i < 21; i++)
             //{
@@ -221,8 +252,6 @@ public class ControlTetris2 : MonoBehaviour
                 }
                 fijar = false;
             }
-
-            ColocarSombra();
         }
         else if ((GameOver == false) && (Animacion == true))
         {
@@ -483,6 +512,13 @@ public class ControlTetris2 : MonoBehaviour
         sombra = Instantiate(prefabPieza);
         sombra.transform.position = new Vector3(4.0f, 19.0f, 0.0f);
         sombra.transform.rotation = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
+        foreach (Transform child in sombra.transform)
+        {
+            child.transform.localScale = new Vector3(0.89f, 0.89f, 0.89f);
+            MeshRenderer mesh = child.GetComponent<MeshRenderer>();
+            mesh.material = materialSombra;
+            mesh.material.color = new Color(mesh.material.color.r, mesh.material.color.g, mesh.material.color.b, 0.9f);
+        }
         ColocarSombra();
 
         // Creacion de la pieza siguiente
@@ -508,15 +544,15 @@ public class ControlTetris2 : MonoBehaviour
         {
             float X = coordenadas.x;
             int xNueva;
-            if (X <= -120) { xNueva = 0; }
-            else if ((X > -120) && (X <= -85)) { xNueva = 1; }
-            else if ((X > -85) && (X <= -50)) { xNueva = 2; }
-            else if ((X > -50) && (X <= -15)) { xNueva = 3; }
-            else if ((X > -15) && (X <= 20)) { xNueva = 4; }
-            else if ((X > 20) && (X <= 55)) { xNueva = 5; }
-            else if ((X > 55) && (X <= 90)) { xNueva = 6; }
-            else if ((X > 90) && (X <= 125)) { xNueva = 7; }
-            else if ((X > 125) && (X <= 160)) { xNueva = 8; }
+            if (X <= -RDHOR*4) { xNueva = 0; }
+            else if ((X > -RDHOR*4) && (X <= -RDHOR*3)) { xNueva = 1; }
+            else if ((X > -RDHOR*3) && (X <= -RDHOR*2)) { xNueva = 2; }
+            else if ((X > -RDHOR*2) && (X <= -RDHOR))   { xNueva = 3; }
+            else if ((X > -RDHOR) && (X <= 00))         { xNueva = 4; }
+            else if ((X > 00) && (X <= RDHOR))          { xNueva = 5; }
+            else if ((X > RDHOR) && (X <= RDHOR*2))     { xNueva = 6; }
+            else if ((X > RDHOR*2) && (X <= RDHOR*3))   { xNueva = 7; }
+            else if ((X > RDHOR*3) && (X <= RDHOR*4))   { xNueva = 8; }
             else { xNueva = 9; }
 
             if ((xNueva - xActualPieza) > 0)
@@ -542,6 +578,7 @@ public class ControlTetris2 : MonoBehaviour
         if (EsPosible(mov))
         {
             Movimiento(mov);
+            ColocarSombra();
         }
     }
 
@@ -1672,6 +1709,8 @@ public class ControlTetris2 : MonoBehaviour
 
     public void ColocarPieza()
     {
+        // Se destruye la sombra para que no de por saco
+        Destroy(sombra);
         lineasAEliminar = new int[4] { -1, -1, -1, -1 };
         int nCeros = 0;
 
@@ -1840,37 +1879,55 @@ public class ControlTetris2 : MonoBehaviour
 
     public void ColocarSombra()
     {
-        //int distancia = 0;
-        //bool sePuede = true;
-        //sombra.transform.rotation = pieza.transform.rotation;
-        //while (sePuede == true)
+        int distancia = 0;
+        bool sePuede = true;
+        int[,] sombraAct = { { piezaAct[0, 0], piezaAct[0, 1] }, { piezaAct[1, 0], piezaAct[1, 1] }, { piezaAct[2, 0], piezaAct[2, 1] }, { piezaAct[3, 0], piezaAct[3, 1] } };
+        // Se ajusta la rotacion de la sombra
+        sombra.transform.rotation = new Quaternion(pieza.transform.rotation.x, pieza.transform.rotation.y, pieza.transform.rotation.z, pieza.transform.rotation.w);
+
+        // Se introduce en sombraAct lo mismo que en piezaAct
+        //for(int i = 0; i < 4; i++)
         //{
-        //    int counter = 0;
-        //    distancia++;
-        //    while ((counter < 4) && (sePuede == true))
+        //    sombraAct[i, 0] = piezaAct[i, 0];
+        //    sombraAct[i, 1] = piezaAct[i, 1];
+        //}
+
+        while (sePuede == true)
+        {
+            int counter = 0;
+            distancia++;
+            while ((counter < 4) && (sePuede == true))
+            {
+                if (sombraAct[counter, 0] == 0)                     // Primero se ve si la pieza está en el suelo
+                {
+                    sePuede = false;
+                }
+                else if (escenario[sombraAct[counter, 0] - 1, sombraAct[counter, 1]] == 1)
+                {                                                   // Despues se mira si hay otra pieza abajo, no se hace en el mismo if para no acceder
+                    sePuede = false;                                // por error a escenario de -1
+                }
+                else                                                // Si todo va bien, abajo está la propia pieza o nada, pasamos al siguiente cubo
+                {
+                    counter++;
+                }
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                sombraAct[i, 0] -= 1;
+            }
+            if (distancia > 21)
+            {
+                sePuede = false;
+            }
+        }
+        sombra.transform.position = new Vector3(pieza.transform.position.x, pieza.transform.position.y - distancia + 1, 0.0f);
+        //for (int i = 0; i < distancia; i++)
+        //{
+        //    for (int j = 0; j < 4; j++)
         //    {
-        //        if (piezaAct[counter, 0] == 0)                     // Primero se ve si la pieza está en el suelo
-        //        {
-        //            sePuede = false;
-        //        }
-        //        else if((piezaAct[counter, 0] - distancia) >= 0)
-        //        {
-        //            if (escenario[piezaAct[counter, 0] - distancia, piezaAct[counter, 1]] == 1)
-        //            {
-        //                sePuede = false;
-        //            }
-        //        }
-        //        else if ((piezaAct[counter, 0] - distancia) < 0)
-        //        {
-        //            sePuede = false;
-        //        }
-        //        else                                                // Si todo va bien, abajo está la propia pieza o nada, pasamos al siguiente cubo
-        //        {
-        //            counter++;
-        //        }
+        //        piezaAct[i, 0] += 1;
         //    }
         //}
-        //sombra.transform.position = new Vector3(pieza.transform.position.x, pieza.transform.position.y - distancia, 0.0f);
     }
 
     //public IEnumerator Rellenar()
